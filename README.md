@@ -2,6 +2,8 @@
 
 Find cycles efficiently by building up a recursive map of element positions.
 
+## QA
+
 - How efficiently?
   + I'm not sure. There are some benchmarks, but I haven't yet proven good bounds.
 
