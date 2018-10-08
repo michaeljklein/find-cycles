@@ -1,0 +1,140 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span>
+</span><a name="line-2"></a><span class="hs-comment">-----------------------------------------------------------------------------</span><span>
+</span><a name="line-3"></a><span class="hs-comment">-- |</span><span>
+</span><a name="line-4"></a><span class="hs-comment">-- Module      :  Data.FiniteStack</span><span>
+</span><a name="line-5"></a><span class="hs-comment">-- Copyright   :  (C) 2018 Michael J. Klein</span><span>
+</span><a name="line-6"></a><span class="hs-comment">-- License     :  BSD-style (see the file LICENSE)</span><span>
+</span><a name="line-7"></a><span class="hs-comment">--</span><span>
+</span><a name="line-8"></a><span class="hs-comment">-- Maintainer  :  lambdamichael@gmail.com</span><span>
+</span><a name="line-9"></a><span class="hs-comment">-- Stability   :  experimental</span><span>
+</span><a name="line-10"></a><span class="hs-comment">-- Portability :  portable</span><span>
+</span><a name="line-11"></a><span class="hs-comment">--</span><span>
+</span><a name="line-12"></a><span class="hs-comment">-- It's an interesting idea, but I don't really have much of a use</span><span>
+</span><a name="line-13"></a><span class="hs-comment">-- for compact finite stacks forming n-ary trees using `MVector`'s.</span><span>
+</span><a name="line-14"></a><span class="hs-comment">----------------------------------------------------------------------------</span><span>
+</span><a name="line-15"></a><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Data.FiniteStack</span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><a name="line-16"></a><span>
+</span><a name="line-17"></a><span class="hs-comment">{-
+
+-- | Finite stacks. These can be used to define n-ary trees that can be appended in log_n time.
+--
+-- Alternatively, if something other than `FiniteStack` is used to recurse, such as `FreeSemigroup`,
+-- we get a layer of granularity above individual values.
+data FiniteStack (n :: Nat) a = FiniteStack
+  { finiteStackLen :: {-# UNBOX #-} !Int -- ^ Current top value index
+  , finiteStack    :: forall s. ST s (MVector s a) -- ^ `MVector` that implements the stack
+  }
+
+finiteStackSize :: FiniteStack n a -&gt; Proxy n
+finiteStackSize _ = Proxy
+
+finiteStackSz :: KnownNat n =&gt; FiniteStack n a -&gt; Int
+finiteStackSz = fromInteger . natVal . finiteStackSize
+
+
+newFiniteStack :: (MVector v a, KnownNat n) =&gt; a -&gt; FiniteStack n a
+newFiniteStack = proxyNewFiniteStack Proxy
+
+proxyNewFiniteStack :: (MVector v a, KnownNat n) =&gt; proxy n -&gt; a -&gt; FiniteStack n a
+proxyNewFiniteStack prxy !x = FiniteStack
+  { finiteStackIx = 0
+  , finiteStack = do
+    v &lt;- unsafeNew . fromInteger $ natVal prxy
+    unsafeWrite v 0 x
+    return v
+  }
+
+
+instance (MVector v a, KnownNat n) =&gt; IsList (FiniteStack n a) where
+  fromList = liftM2 fromListN length id
+
+  fromListN = proxyFromListN Proxy
+
+  toList FiniteStack{..} = _ $
+    finiteStack &gt;&gt;= SM.toList . mstream . unsafeTake (finiteStackIx + 1)
+
+proxyFromListN :: (MVector v a, KnownNat n) =&gt; proxy n -&gt; Int -&gt; [a] -&gt; FiniteStack n a
+proxyFromListN prxy n xs
+  | n &lt; 1  = error $ &quot;proxyFromListN: non-positive size: &quot; ++ show n
+  | n &gt; sz = error $ &quot;proxyFromListN: given size is greater than maximum: &quot; ++ show n ++ &quot; &gt; &quot; ++ show sz
+  | otherwise = FiniteStack
+    { finiteStackIx = n - 1
+    , finiteStack = do
+      v &lt;- unsafeNew sz
+      v `fill` SM.fromListN n xs
+      return v
+    }
+  where
+    sz = fromInteger $ natVal prxy
+
+newtype These2 a = These2 { runThese2 :: These a a }
+
+appendFiniteStacks :: (MVector v a, KnownNat n) =&gt; FiniteStack n a -&gt; FiniteStack n a -&gt; These2 (FiniteStack n a)
+
+Assume both are not full, then the result can be:
+  One not full
+  One full
+  One full and one not full
+
+Unless their lengths are greater than the max size (resulting in the third case):
+  Copy all of smaller to end of bigger
+
+In the last case:
+  Copy smaller up to end of bigger
+  Copy rest of smaller to memo pad -&gt; is new result
+  Smaller is new memo pad
+
+
+The idea is that we have a fast possibly-empty collection of full FiniteStack's and a single non-full FiniteStack.
+
+To append a value, we append to the front FiniteStack and add to the collection of fulls if full.
+
+To mappend two, we mappend their full FiniteStack's and use appendFiniteStacks to combine their heads, with a possible
+  single new full FiniteStack to be added to the collection.
+
+
+How about:
+  We allow the FiniteStack's to be empty
+  We recurse to use this FiniteStack method for our &quot;fast possibly-empty collection&quot;
+
+newtype FiniteStacks n a = (FiniteStack n a, FiniteStacks n (FiniteStack n a))
+
+
+
+-- f a = (g a, f (g a))
+-- f = g :*: (f :.: g)
+
+
+-- fill :: (PrimMonad m, MVector v a) =&gt; v (PrimState m) a -&gt; Stream m a -&gt; m (v (PrimState m) a)
+
+
+
+-- mstream :: (PrimMonad m, MVector v a) =&gt; v (PrimState m) a -&gt; Stream m a
+
+-- Conversions
+-- SM.toList :: Monad m =&gt; Stream m a -&gt; m [a] Source#
+
+-- Convert a Stream to a list
+
+-- SM.fromList :: Monad m =&gt; [a] -&gt; Stream m a Source#
+
+-- Convert a list to a Stream
+
+-- SM.fromListN :: Monad m =&gt; Int -&gt; [a] -&gt; Stream m a
+
+-- | `Nothing` if full
+-- pushFiniteStack :: (MVector v a, KnownNat n) =&gt; a -&gt; FiniteStack v n a -&gt; Maybe (FiniteStack v n a)
+-- pushFiniteStack x fs@FiniteStack{..} | _
+
+-- instance (MVector v a, KnownNat n) =&gt; _
+
+-- unsafeNew :: (PrimMonad m, MVector v a) =&gt; Int -&gt; m (v (PrimState m) a) Source#
+
+-- unsafeWrite :: (PrimMonad m, MVector v a) =&gt; v (PrimState m) a -&gt; Int -&gt; a -&gt; m ()
+
+-- Create a mutable vector of the given length. The memory is not initialized.
+
+
+-}</span><span>
+</span><a name="line-139"></a><span>
+</span><a name="line-140"></a></pre></body></html>
