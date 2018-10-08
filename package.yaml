@@ -1,0 +1,62 @@
+name:                find-cycles
+version:             0.1.0.0
+github:              "michaeljklein/find-cycles"
+license:             BSD3
+author:              "Michael J. Klein"
+maintainer:          "lambdamichael@gmail.com"
+copyright:           "2018 Michael J. Klein"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/michaeljklein/find-cycles#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- QuickCheck
+- arithmoi
+- bifunctors
+- comonad
+- containers
+- criterion >= 1.5.1.0
+- deepseq
+- exact-combinatorics
+- free
+- statistics
+- transformers
+- weigh
+# - Chart
+# - Chart-cairo
+
+library:
+  source-dirs: src
+
+executables:
+  find-cycles-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - find-cycles
+
+tests:
+  find-cycles-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - find-cycles
