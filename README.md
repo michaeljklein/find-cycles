@@ -143,4 +143,7 @@ A prototype non-empty `Seq`
   convenient ways.
 
 
+# Docs
+
+Haddock generated documentation may be found [here](https://michaeljklein.github.io/find-cycles/)
 
